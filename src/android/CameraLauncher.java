@@ -667,6 +667,12 @@ private String getPicutresPath()
     File storageDir = Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_PICTURES);
     String galleryPath = storageDir.getAbsolutePath() + "/" + imageFileName;
+
+    File parentDirectory = new File(galleryPath).getParentFile();
+    if (!parentDirectory.exists()) {
+        parentDirectory.mkdir();
+    }
+
     return galleryPath;
 }
 
