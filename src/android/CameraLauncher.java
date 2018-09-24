@@ -44,6 +44,7 @@ import org.json.JSONObject;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.thundermaps.android.library.utils.TLog;
 
 import android.Manifest;
 import android.annotation.TargetApi;
@@ -80,6 +81,8 @@ import android.content.pm.PermissionInfo;
  * the camera view was shown is redisplayed.
  */
 public class CameraLauncher extends CordovaPlugin implements MediaScannerConnectionClient {
+
+    private static final String TAG = "CameraLauncher";
 
     private static final int DATA_URL = 0;              // Return base64 encoded string
     private static final int FILE_URI = 1;              // Return file uri (content://media/external/images/media/2 for Android)
@@ -526,7 +529,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 thisJson = gson.toJson(exif);
 
             } catch (IOException e) {
-                e.printStackTrace();
+                TLog.e(TAG, e);
             }
         }
 
@@ -537,17 +540,20 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // in the gallery and the modified image is saved in the temporary
         // directory
         if (this.saveToPhotoAlbum) {
-            galleryUri = Uri.fromFile(new File(getPicutresPath()));
+            try {
+                galleryUri = Uri.fromFile(new File(getPicutresPath()));
 
-            if(this.allowEdit && this.croppedUri != null) {
-                writeUncompressedImage(this.croppedUri, galleryUri);
-            } else {
+                if (this.allowEdit && this.croppedUri != null) {
+                    writeUncompressedImage(this.croppedUri, galleryUri);
+                } else {
+                    Uri imageUri = this.imageUri.getFileUri();
+                    writeUncompressedImage(imageUri, galleryUri);
+                }
 
-                 Uri imageUri = this.imageUri.getFileUri();
-                writeUncompressedImage(imageUri, galleryUri);
+                refreshGallery(galleryUri);
+            } catch (IOException e) {
+                TLog.e(TAG, e);
             }
-
-            refreshGallery(galleryUri);
         }
 
         // If sending base64 image back
@@ -561,7 +567,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
             // Double-check the bitmap.
             if (bitmap == null) {
-                Log.d(LOG_TAG, "I either have a null image path or null bitmap");
+                TLog.e(TAG, new Exception("I either have a null image path or null bitmap"));
                 this.failPicture("Unable to create bitmap!");
                 return;
             }
@@ -667,6 +673,12 @@ private String getPicutresPath()
     File storageDir = Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_PICTURES);
     String galleryPath = storageDir.getAbsolutePath() + "/" + imageFileName;
+
+    File parentDirectory = new File(galleryPath).getParentFile();
+    if (!parentDirectory.exists()) {
+        parentDirectory.mkdir();
+    }
+
     return galleryPath;
 }
 
@@ -1074,6 +1086,9 @@ private void processResultFromGallery(int destType, Intent intent) {
         try {
             fis = new FileInputStream(FileHelper.stripFileProtocol(src.toString()));
             os = this.cordova.getActivity().getContentResolver().openOutputStream(dest);
+            if (os == null) {
+                throw new IOException();
+            }
             byte[] buffer = new byte[4096];
             int len;
             while ((len = fis.read(buffer)) != -1) {
@@ -1085,14 +1100,14 @@ private void processResultFromGallery(int destType, Intent intent) {
                 try {
                     os.close();
                 } catch (IOException e) {
-                    LOG.d(LOG_TAG,"Exception while closing output stream.");
+                    TLog.e(TAG, e);
                 }
             }
             if (fis != null) {
                 try {
                     fis.close();
                 } catch (IOException e) {
-                    LOG.d(LOG_TAG,"Exception while closing file input stream.");
+                    TLog.e(TAG, e);
                 }
             }
         }
